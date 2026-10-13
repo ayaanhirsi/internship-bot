@@ -43,8 +43,10 @@ GREENHOUSE = [
     "cloudflare", "datadog", "okta", "gitlab", "mongodb", "databricks",
     "stripe", "anthropic", "elastic", "twilio", "coinbase", "tailscale",
     "1password", "snyk", "wiz", "sentinelone", "zscaler", "rapid7",
+    "wealthsimple", "pointclickcare", "stackadapt", "ecobee", "faire",
+    "instacart", "robinhood", "figma", "reddit", "asana", "brex",
 ]
-LEVER = ["palantir", "wealthsimple", "kobo", "nuvei"]
+LEVER = ["palantir", "wealthsimple", "kobo", "nuvei", "applyboard", "clearco"]
 
 # Companies you want referral links for (printed at the end).
 REFERRAL_TARGETS = ["Google", "RBC", "Cloudflare", "Datadog", "Shopify", "Microsoft", "Amazon"]
@@ -62,24 +64,37 @@ RESUME_KEYWORDS = {
     "jenkins": 2, "ansible": 2, "aws": 2, "azure": 2, "bash": 2, "powershell": 1,
     "rest api": 2, "fastapi": 2, "machine learning": 2, "ml": 1, "automation": 3,
     "infrastructure": 2, "git": 1, "agile": 1, "linux": 2, "networking": 2,
+    "software engineer": 4, "software developer": 4, "backend": 4,
+    "full stack": 3, "data engineer": 3, "data science": 3,
+    "artificial intelligence": 3, "quantitative": 3, "react": 2,
+    "javascript": 2, "node.js": 2, "postgresql": 2, "spark": 2,
     "wireshark": 2, "nmap": 2, "burp": 2, "metasploit": 2, "semgrep": 2,
 }
 NEGATIVE = {  # things that don't fit a 2nd/3rd-year security student
     "phd": -10, "ph.d": -10, "master's": -4, "mba": -10, "senior": -6, "staff": -6,
-    "director": -10, "sales": -6, "marketing": -6, "recruit": -6, "finance intern": -6,
+    "director": -10, "sales": -6, "marketing": -6, "recruit": -6,
     "legal": -6, "hardware": -3, "mechanical": -6, "electrical": -4,
 }
 INTERN_WORDS = ("intern", "co-op", "coop", "co op", "student", "apprentice", "new grad intern")
 SECURITY_WORDS = ("secur", "cyber", "devsecops", "appsec", "infosec", "threat",
                   "vulnerab", "pentest", "penetration", "soc ", "detection", "risk", "grc",
-                  "cloud", "devops", "platform", "software", "sre", "reliab", "data", "ml ", "ai ")
+                  "cloud", "devops", "platform", "software", "sre", "reliab", "data", "ml ", "ai ",
+                   "backend", "full stack", "quant", "developer", "engineer", "analytics")
 
 SEASON_PATTERNS = {
     "Winter 2027": r"winter\s*2027|jan(uary)?\s*2027|2027\s*winter|\bw27\b|jan\s*[-–]\s*apr\s*2027",
     "Summer 2027": r"summer\s*2027|may\s*2027|2027\s*summer|\bs27\b|may\s*[-–]\s*aug(ust)?\s*2027",
+    "Fall 2027": r"fall\s*2027|autumn\s*2027|sep(tember)?\s*2027|2027\s*fall",
 }
-CANADA = ("canada", "toronto", "ontario", "waterloo", "ottawa", "montreal", "vancouver",
-          "mississauga", "markham", "kitchener", "calgary", "remote")
+GTA = ("toronto", "north york", "scarborough", "etobicoke", "markham",
+       "mississauga", "brampton", "vaughan", "richmond hill", "oakville",
+       "burlington", "pickering", "ajax", "whitby", "oshawa")
+ONTARIO = ("waterloo", "kitchener", "cambridge", "ottawa", "kanata",
+           "hamilton", "london, on", "guelph", "kingston", "ontario")
+CANADA = ("canada", "toronto", "ontario", "waterloo", "ottawa", "montreal",
+          "montréal", "vancouver", "mississauga", "markham", "kitchener",
+          "calgary", "edmonton", "halifax", "winnipeg", "quebec",
+          "québec", "british columbia", "alberta", "nova scotia")
 HEADERS = {"User-Agent": "internship-finder/1.0 (personal use)"}
 
 
@@ -199,13 +214,27 @@ US_CITIES = ("new york", "san francisco", "seattle", "austin", "boston", "chicag
              "sunnyvale", "los angeles", "san jose", "washington", "atlanta", "denver", "bellevue")
 
 
+def location_priority(job):
+    """Toronto-first ranking; unknown/remote locations stay eligible."""
+    loc = (job.get("location") or "").lower()
+    if any(place in loc for place in GTA):
+        return 100, "Toronto / GTA"
+    if any(place in loc for place in ONTARIO):
+        return 70, "Ontario"
+    if any(place in loc for place in CANADA):
+        return 45, "Canada"
+    if US_RE.search(loc) or any(place in loc for place in US_CITIES):
+        return 25, "United States"
+    return 10, "Remote / Unspecified" if "remote" in loc or not loc else "Other"
+
+
 def location_ok(job, region):
-    """region: 'both' (default), 'canada', or 'us'. Remote and blank locations always pass."""
-    loc = job["location"].lower()
+    """Allow both Canada and US; unknown remote stays eligible."""
+    loc = (job.get("location") or "").lower()
     if not loc or "remote" in loc:
         return True
-    is_ca = any(c in loc for c in CANADA)
-    is_us = bool(US_RE.search(job["location"])) or any(c in loc for c in US_CITIES)
+    is_ca = any(c in loc for c in CANADA) or any(c in loc for c in GTA)
+    is_us = bool(US_RE.search(loc)) or any(c in loc for c in US_CITIES)
     if region == "canada":
         return is_ca
     if region == "us":
@@ -229,15 +258,18 @@ def filter_and_rank(jobs, region, min_score):
             continue
         season = detect_season(j)
         # If a listing names a season and it's neither of ours, drop it (e.g. Fall 2026).
-        explicit_other = re.search(r"(fall|summer|winter)\s*2026|2028", f"{j['title']} {j['terms']}".lower())
+        explicit_other = re.search(r"\b(?:fall|summer|winter|spring)\s*202[0-689]\b|\b202[0-689]\s*(?:fall|summer|winter|spring)\b", f"{j['title']} {j['terms']}".lower())
         if explicit_other and not season:
             continue
         sc, hits = score(j)
         if sc < min_score:
             continue
-        j.update(season=season or "unspecified", score=sc, matched=", ".join(hits))
+        bonus, region_label = location_priority(j)
+        j.update(season=season or "unspecified", score=sc,
+                 priority_score=sc + bonus, region=region_label,
+                 matched=", ".join(hits))
         ranked.append(j)
-    ranked.sort(key=lambda x: (x["season"] != "unspecified", x["score"]), reverse=True)
+    ranked.sort(key=lambda x: (x["priority_score"], x["season"] != "unspecified"), reverse=True)
     return ranked
 
 
@@ -281,14 +313,14 @@ def main():
 
     with open(args.out, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["score", "season", "company", "title", "location", "matched_keywords", "url", "source"])
+        w.writerow(["priority_score", "score", "region", "season", "company", "title", "location", "matched_keywords", "url", "source"])
         for j in ranked:
-            w.writerow([j["score"], j["season"], j["company"], j["title"], j["location"],
+            w.writerow([j["priority_score"], j["score"], j["region"], j["season"], j["company"], j["title"], j["location"],
                         j["matched"], j["url"], j["source"]])
 
     print(f"\n=== Region: {args.region} | Top {min(args.top, len(ranked))} of {len(ranked)} matches (saved to {args.out}) ===\n")
     for j in ranked[: args.top]:
-        print(f"[{j['score']:>3}] {j['company']} | {j['title']} | {j['location'] or 'n/a'} | {j['season']}")
+        print(f"[{j['priority_score']:>3}] {j['company']} | {j['title']} | {j['location'] or 'n/a'} | {j['season']}")
         print(f"      matched: {j['matched']}")
         print(f"      {j['url']}\n")
 
