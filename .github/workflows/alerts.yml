@@ -1,24 +1,39 @@
+
 name: internship-alerts
-on:
+
 on:
   schedule:
-    - cron: "0 12-22 * * *"   # hourly, 8am to 6pm Toronto time
+    # Every hour from 8 AM to 6 PM Toronto time (EDT)
+    - cron: "0 12-22 * * *"
   workflow_dispatch:
+
 permissions:
   contents: write
+
+concurrency:
+  group: internship-alerts
+  cancel-in-progress: false
+
 jobs:
   run:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install requests
-      - run: python notify.py
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Find internships and send alerts
+        run: python notify.py
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-      - name: Save seen list
+
+      - name: Save seen internships
         run: |
           git config user.name "internship-bot"
           git config user.email "bot@users.noreply.github.com"
