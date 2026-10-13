@@ -22,7 +22,7 @@ for j in new:
            f"📅 {j['season']} | Match {j['score']} | Priority {j['priority_score']}\n"
            f"{j['url']}")
     try:
-        r = requests.post(hook, json={"content": msg}, timeout=15)
+        r = requests.post(hook, json={"content": msg}, timeout=25)
         if r.status_code in (200, 204):
             sent.append(j["url"])
         else:
