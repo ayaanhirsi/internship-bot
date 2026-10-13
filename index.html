@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build a Free Internship Alert Bot</title>
+<style>
+:root{--ink:#0a0a0a;--paper:#f4f3f0;--mute:#8a8985;--line:#d9d8d3;--card:#fff}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--paper);color:var(--ink);font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;font-weight:300;line-height:1.7;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.wrap{max-width:860px;margin:0 auto;padding:0 24px}
+nav{position:sticky;top:0;z-index:10;background:rgba(244,243,240,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;justify-content:space-between;align-items:center;height:56px;max-width:1100px}
+.logo{font-size:12px;letter-spacing:.35em;text-transform:uppercase;font-weight:500}
+nav ul{display:flex;gap:22px;list-style:none;overflow-x:auto}
+nav a{font-size:10px;letter-spacing:.25em;text-transform:uppercase;text-decoration:none;color:var(--mute);white-space:nowrap}
+nav a:hover{color:var(--ink)}
+header.hero{min-height:88vh;display:flex;flex-direction:column;justify-content:center;border-bottom:1px solid var(--line)}
+.eyebrow{font-size:11px;letter-spacing:.4em;text-transform:uppercase;color:var(--mute);margin-bottom:28px}
+h1{font-size:clamp(40px,9vw,104px);line-height:.98;font-weight:200;letter-spacing:-.02em;text-transform:uppercase}
+h1 em{font-style:normal;font-weight:500}
+.hero p{max-width:520px;margin-top:36px;font-size:16px;color:#3b3b39}
+.meta{display:flex;gap:40px;margin-top:48px;flex-wrap:wrap}
+.meta div{font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:var(--mute)}
+.meta b{display:block;color:var(--ink);font-weight:500;font-size:13px;letter-spacing:.15em;margin-top:4px}
+section{padding:110px 0 30px;border-bottom:1px solid var(--line)}
+.num{font-size:12px;letter-spacing:.35em;color:var(--mute)}
+h2{font-size:clamp(28px,5vw,48px);font-weight:200;letter-spacing:.02em;text-transform:uppercase;margin:10px 0 28px;line-height:1.1}
+h3{font-size:12px;letter-spacing:.3em;text-transform:uppercase;font-weight:500;margin:38px 0 14px}
+p{margin-bottom:16px;max-width:680px}
+ol.steps{list-style:none;counter-reset:s;margin:20px 0 30px}
+ol.steps li{counter-increment:s;position:relative;padding:18px 0 18px 64px;border-top:1px solid var(--line);max-width:700px}
+ol.steps li:last-child{border-bottom:1px solid var(--line)}
+ol.steps li::before{content:counter(s,decimal-leading-zero);position:absolute;left:0;top:18px;font-size:12px;letter-spacing:.2em;color:var(--mute)}
+code{font-family:"SFMono-Regular",Menlo,Consolas,monospace;font-size:.86em;background:#e8e7e2;padding:2px 6px}
+.code{position:relative;background:var(--ink);color:#e9e8e4;margin:18px 0 28px;max-width:760px}
+.code .bar{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #2a2a2a;font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:#8a8985}
+.code button{background:none;border:1px solid #444;color:#e9e8e4;font-size:10px;letter-spacing:.25em;text-transform:uppercase;padding:5px 12px;cursor:pointer;transition:.2s}
+.code button:hover{background:#fff;color:#000}
+pre{padding:18px 16px;overflow-x:auto;font-family:"SFMono-Regular",Menlo,Consolas,monospace;font-size:12.5px;line-height:1.65}
+.note,.warn{border:1px solid var(--ink);padding:20px 24px;margin:26px 0;max-width:700px;font-size:14.5px;background:var(--card)}
+.warn{background:var(--ink);color:var(--paper)}
+.note b,.warn b{display:block;font-size:10px;letter-spacing:.35em;text-transform:uppercase;margin-bottom:6px;font-weight:500}
+table{border-collapse:collapse;width:100%;max-width:700px;margin:20px 0 30px;font-size:14px}
+th,td{text-align:left;padding:14px 12px 14px 0;border-top:1px solid var(--line);vertical-align:top}
+th{font-size:10px;letter-spacing:.3em;text-transform:uppercase;font-weight:500;color:var(--mute)}
+td:first-child{font-family:Menlo,Consolas,monospace;font-size:12.5px;white-space:nowrap}
+details{border-top:1px solid var(--line);max-width:700px}
+details:last-of-type{border-bottom:1px solid var(--line)}
+summary{cursor:pointer;list-style:none;padding:20px 0;font-size:13px;letter-spacing:.14em;text-transform:uppercase;display:flex;justify-content:space-between;gap:20px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";font-size:18px;line-height:1}
+details[open] summary::after{content:"\2212"}
+details p{color:#3b3b39}
+footer{padding:90px 0 70px;text-align:center}
+footer .logo{display:block;margin-bottom:14px}
+footer p{margin:0 auto;font-size:12px;color:var(--mute);letter-spacing:.1em}
+@media(max-width:640px){nav ul{display:none}section{padding-top:80px}ol.steps li{padding-left:48px}}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap"><span class="logo">Alert Bot</span>
+<ul><li><a href="#s1">Setup</a></li><li><a href="#s2">Discord</a></li><li><a href="#s3">GitHub</a></li><li><a href="#s4">Files</a></li><li><a href="#s5">Secret</a></li><li><a href="#s6">Run</a></li><li><a href="#s7">Schedule</a></li><li><a href="#faq">FAQ</a></li></ul></div></nav>
+
+<header class="hero"><div class="wrap">
+<div class="eyebrow">A beginner tutorial / Free / No server</div>
+<h1>Get new<br><em>internship</em><br>alerts in Discord</h1>
+<p>A step-by-step guide to building a bot that checks job listings for you every hour and pings your Discord only when something new appears. Written for people who have never used GitHub Actions. If I could do it, you can.</p>
+<div class="meta"><div>Time<b>45 minutes</b></div><div>Cost<b>Free</b></div><div>Skill level<b>Beginner</b></div></div>
+</div></header>
+
+<section id="s1"><div class="wrap">
+<div class="num">00</div><h2>How it works</h2>
+<p>Four pieces, all free:</p>
+<ol class="steps">
+<li><b>A Python script</b> (<code>notify.py</code>) that checks job sources and finds roles matching your keywords.</li>
+<li><b>A Discord webhook</b>, a private URL that lets the script post into one channel of your server.</li>
+<li><b>A memory file</b> (<code>seen.json</code>) listing every role already sent, so you never get repeats.</li>
+<li><b>GitHub Actions</b>, GitHub's free robot that runs the script on a schedule, so your computer can stay off.</li>
+</ol>
+<div class="note"><b>Before you start</b>You need a free GitHub account, a Discord server where you can make channels, and Python installed if you want to test on your own computer first (optional).</div>
+</div></section>
+
+<section id="s2"><div class="wrap">
+<div class="num">01</div><h2>Make the Discord webhook</h2>
+<ol class="steps">
+<li>Open your Discord server and create a text channel, for example <code>#internship-alerts</code>.</li>
+<li>Click the gear icon next to the channel name, then <b>Integrations</b>, then <b>Webhooks</b>, then <b>New Webhook</b>.</li>
+<li>Name it whatever you like, make sure it points to your new channel, then click <b>Copy Webhook URL</b>.</li>
+<li>Paste that URL somewhere private for now, like a notes app. You will need it in step 05.</li>
+</ol>
+<div class="warn"><b>Never share this URL</b>Anyone who has it can post in your channel. Do not paste it in a chat, a screenshot, a public repo or a LinkedIn post. If it leaks, go back to Webhooks, delete it and create a new one. It takes ten seconds.</div>
+</div></section>
+
+<section id="s3"><div class="wrap">
+<div class="num">02</div><h2>Create the GitHub repo</h2>
+<ol class="steps">
+<li>Go to github.com, click the <b>+</b> in the top right, then <b>New repository</b>.</li>
+<li>Name it something like <code>internship-bot</code>.</li>
+<li>Choose <b>Private</b> so nobody else can see your setup.</li>
+<li>Tick <b>Add a README file</b> and click <b>Create repository</b>.</li>
+</ol>
+</div></section>
+
+<section id="s4"><div class="wrap">
+<div class="num">03</div><h2>Add the three files</h2>
+<p>You can do all of this in the browser: in your repo click <b>Add file</b>, then <b>Create new file</b>, paste the content, and click <b>Commit changes</b>.</p>
+
+<h3>File 1: notify.py</h3>
+<p>This is a simple starter version. Replace the <code>SOURCES</code> and <code>KEYWORDS</code> with the job feeds and words you care about. Each source should return a list of jobs with a title, company and link.</p>
+<div class="code"><div class="bar"><span>notify.py</span><button data-copy>Copy</button></div>
+<pre>import json
+import os
+from pathlib import Path
+
+import requests
+
+WEBHOOK = os.environ["DISCORD_WEBHOOK"]
+SEEN_FILE = Path("seen.json")
+MAX_PER_RUN = 15
+
+# Words a job title must contain (any one of them)
+KEYWORDS = ["intern", "co-op", "student"]
+
+# Replace with your own sources (JSON feeds that return a list of jobs)
+SOURCES = [
+    "https://example.com/jobs.json",
+]
+
+
+def load_seen():
+    if SEEN_FILE.exists():
+        return set(json.loads(SEEN_FILE.read_text()))
+    return set()
+
+
+def fetch_jobs():
+    jobs = []
+    for url in SOURCES:
+        try:
+            r = requests.get(url, timeout=30)
+            r.raise_for_status()
+            jobs.extend(r.json())
+        except Exception as e:
+            print(f"source failed: {url} ({e})")
+    return jobs
+
+
+def matches(job):
+    title = job.get("title", "").lower()
+    return any(k in title for k in KEYWORDS)
+
+
+def main():
+    seen = load_seen()
+    jobs = [j for j in fetch_jobs() if matches(j)]
+    new = [j for j in jobs if j.get("url") and j["url"] not in seen]
+    print(f"matched {len(jobs)}, new {len(new)}")
+
+    sent = 0
+    for job in new[:MAX_PER_RUN]:
+        msg = f"**{job.get('title')}** at {job.get('company', 'Unknown')}\n{job['url']}"
+        r = requests.post(WEBHOOK, json={"content": msg}, timeout=30)
+        if r.status_code in (200, 204):
+            seen.add(job["url"])
+            sent += 1
+    print(f"sent {sent} new roles")
+
+    SEEN_FILE.write_text(json.dumps(sorted(seen), indent=2))
+
+
+if __name__ == "__main__":
+    main()</pre></div>
+
+<h3>File 2: seen.json</h3>
+<p>This is the bot's memory. Create it with just an empty list:</p>
+<div class="code"><div class="bar"><span>seen.json</span><button data-copy>Copy</button></div>
+<pre>[]</pre></div>
+
+<h3>File 3: the workflow 
+
+</h3>
+<p>GitHub only recognizes workflows inside a folder called <code>.github/workflows/</code>. If you save the file at the top level of the repo, it will never appear in the Actions tab.</p>
+<p>When you click <b>Create new file</b>, type the full path into the filename box: <code>.github/workflows/alerts.yml</code>. Typing the slashes creates the folders automatically.</p>
+<div class="code"><div class="bar"><span>.github/workflows/alerts.yml</span><button data-copy>Copy</button></div>
+<pre>name: internship-alerts
+
+on:
+  schedule:
+    - cron: "0 12-22 * * *"   # hourly, about 8am-6pm Toronto time
+  workflow_dispatch:           # adds a manual "Run workflow" button
+
+permissions:
+  contents: write
+
+concurrency:
+  group: internship-alerts
+  cancel-in-progress: false
+
+jobs:
+  alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests
+
+      - name: Run notify.py
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: python notify.py
+
+      - name: Save seen.json
+        run: |
+          git config user.name "alerts-bot"
+          git config user.email "alerts-bot@users.noreply.github.com"
+          git add seen.json
+          git diff --cached --quiet || (git commit -m "update seen" &amp;&amp; git push)</pre></div>
+
+<div class="note"><b>Already saved it in the wrong place?</b>Click the file, click the pencil icon, change the filename box to <code>.github/workflows/alerts.yml</code>, then commit. This renames the file instead of copying it, so you will not end up with a duplicate.</div>
+</div></section>
+
+<section id="s5"><div class="wrap">
+<div class="num">04</div><h2>Add your webhook as a secret</h2>
+<p>This is how the bot gets your Discord URL without it ever being written in your code.</p>
+<ol class="steps">
+<li>In your repo, click <b>Settings</b>.</li>
+<li>In the left sidebar open <b>Secrets and variables</b>, then <b>Actions</b>.</li>
+<li>Click <b>New repository secret</b>.</li>
+<li>Name: <code>DISCORD_WEBHOOK</code> (exactly, all caps). Secret: paste your webhook URL.</li>
+<li>Click <b>Add secret</b>.</li>
+</ol>
+<div class="note"><b>Leaked it by accident?</b>Delete that webhook in Discord, make a new one, and update the secret. Always use the newest URL.</div>
+</div></section>
+
+<section id="s6"><div class="wrap">
+<div class="num">05</div><h2>Run it for the first time</h2>
+<ol class="steps">
+<li>Click the <b>Actions</b> tab in your repo. If GitHub asks, click the green button to enable workflows.</li>
+<li>In the left sidebar click <b>internship-alerts</b>.</li>
+<li>Click <b>Run workflow</b>, then the green <b>Run workflow</b> button.</li>
+<li>Wait about a minute and refresh. A green check means success. Then look at your Discord channel.</li>
+</ol>
+<h3>Reading the result</h3>
+<p>Click the run, then the job, then expand the <b>Run notify.py</b> step. It prints a line like <code>matched 37, new 15</code> and <code>sent 15 new roles</code>.</p>
+<table>
+<tr><th>What you see</th><th>What it means</th></tr>
+<tr><td>Green check + messages in Discord</td><td>Everything works.</td></tr>
+<tr><td>Green check, empty channel</td><td>Nothing new matched, or your sources are not loading. Check the "matched" number.</td></tr>
+<tr><td>matched 0</td><td>A source URL is wrong or your keywords are too narrow.</td></tr>
+<tr><td>Red X</td><td>Click the failed run and read the error. Common causes: the workflow file is in the wrong folder, or the secret name is misspelled.</td></tr>
+<tr><td>Two yellow warnings</td><td>Node.js and Ubuntu notices from GitHub itself. Harmless, ignore them.</td></tr>
+</table>
+</div></section>
+
+<section id="s7"><div class="wrap">
+<div class="num">06</div><h2>Make it run automatically</h2>
+<p>The schedule is the <code>cron</code> line in your workflow. Seeing <code>on: workflow_dispatch</code> on a run only means you started it manually. The cron line is what makes it run on its own.</p>
+<table>
+<tr><th>Cron</th><th>How often</th></tr>
+<tr><td>0 12-22 * * *</td><td>Every hour during the day (recommended)</td></tr>
+<tr><td>0 */3 * * *</td><td>Every 3 hours, around the clock</td></tr>
+<tr><td>0 */6 * * *</td><td>Every 6 hours</td></tr>
+<tr><td>0 13 * * *</td><td>Once a day at 9am Toronto time</td></tr>
+</table>
+<p>To change it, open <code>.github/workflows/alerts.yml</code>, click the pencil icon, edit the cron line and commit. It takes effect on its own.</p>
+<h3>Good to know</h3>
+<ol class="steps">
+<li><b>Cron uses UTC.</b> 12:00 UTC is 8am Toronto in summer and 7am after the clocks change in November.</li>
+<li><b>GitHub runs late.</b> Scheduled runs often start 10 to 30 minutes after the time you set, and may occasionally skip one.</li>
+<li><b>Free minutes.</b> Private repos get 2,000 free Actions minutes a month. One run takes about a minute. Hourly during the day is roughly 330 minutes a month. Every 30 minutes around the clock would use almost all of it, so I would not go that high.</li>
+<li><b>The 60-day pause.</b> GitHub pauses scheduled workflows on repos with no activity for 60 days. The bot commits <code>seen.json</code> whenever it finds new roles, which usually keeps it alive. If alerts stop, open the Actions tab and re-enable the workflow.</li>
+</ol>
+</div></section>
+
+<section id="faq"><div class="wrap">
+<div class="num">07</div><h2>Questions I actually had</h2>
+<details><summary>Will it send the same roles again and again?</summary><p>No. Every run checks each role against <code>seen.json</code>. Roles already on the list are skipped. New ones are sent and then added to the list. The only way to get repeats is if the final step fails to save <code>seen.json</code> back to the repo, so check that step if you ever see duplicates.</p></details>
+<details><summary>Why is my Discord channel quiet?</summary><p>If nothing new was posted since the last run, the bot sends nothing. That is normal. Open the run log and look for the <code>matched</code> line to confirm it is checking.</p></details>
+<details><summary>Why did it only send 15 roles?</summary><p>The script caps each run at 15 so Discord is not flooded. The rest are not marked as seen, so they arrive on the next run. Nothing is lost.</p></details>
+<details><summary>Do I need to keep my computer on?</summary><p>No. GitHub runs it in the cloud, so your computer can be off or closed.</p></details>
+<details><summary>Why did the workflow not show up in the Actions tab?</summary><p>Almost always because the file is not inside <code>.github/workflows/</code>. See step 03 to move it.</p></details>
+<details><summary>What is __pycache__ and should it be in my repo?</summary><p>It is a folder Python creates when you test locally. It is harmless but unnecessary. From your project folder run <code>git pull</code>, then <code>echo __pycache__/ &gt;&gt; .gitignore</code>, <code>git rm -r --cached __pycache__</code>, <code>git add .gitignore</code>, <code>git commit -m "ignore pycache"</code> and <code>git push</code>. Run <code>git pull</code> first because GitHub now has commits your computer does not.</p></details>
+<details><summary>I pasted my webhook somewhere public. Now what?</summary><p>Delete it in Discord (Integrations, Webhooks), create a new one, and update the <code>DISCORD_WEBHOOK</code> secret in GitHub.</p></details>
+<details><summary>Can I add more companies or keywords?</summary><p>Yes. Add sources to the <code>SOURCES</code> list and words to <code>KEYWORDS</code> in <code>notify.py</code>, then commit. The next run uses the new settings.</p></details>
+</div></section>
+
+<footer><div class="wrap"><span class="logo">Alert Bot</span><p>Built with Python, Discord and GitHub Actions. Free forever.</p></div></footer>
+
+<script>
+document.querySelectorAll('[data-copy]').forEach(function(b){
+  b.addEventListener('click',function(){
+    var t=b.closest('.code').querySelector('pre').textContent;
+    (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){
+      b.textContent='Copied';setTimeout(function(){b.textContent='Copy'},1500);
+    }).catch(function(){b.textContent='Select text';});
+  });
+});
+</script>
+</body>
+</html>
