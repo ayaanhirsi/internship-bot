@@ -13,7 +13,7 @@ hook = os.environ.get("DISCORD_WEBHOOK")
 if not hook:
     sys.exit("DISCORD_WEBHOOK is not set")
 
-ranked = f.filter_and_rank(f.collect(), "both", 8)
+ranked = f.filter_and_rank(f.collect(), "both", 8, days=0)
 new = [j for j in ranked if j["url"] not in seen][:15]
 sent = []
 for j in new:
