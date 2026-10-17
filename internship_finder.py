@@ -10,13 +10,16 @@ Sources (all public, no API keys):
   4. Google Careers (no stable public API, so it prints pre-filtered search links)
 
 Usage:
-    pip install requests
-    python internship_finder.py                  # Canada + US + remote, top 40
-    python internship_finder.py --region canada  # or --region us
-    python internship_finder.py --top 100 --min-score 6
+  pip install requests
+  python internship_finder.py                    # Canada + US + remote, posted TODAY only
+  python internship_finder.py --days 1           # today + yesterday
+  python internship_finder.py --any-date         # turn the date filter off
+  python internship_finder.py --region canada    # or --region us
+  python internship_finder.py --top 100 --min-score 6
 
 Output: internships.csv (full ranked list) + printed top results.
 """
+
 import argparse
 import csv
 import html
@@ -24,6 +27,8 @@ import re
 import sys
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -52,6 +57,9 @@ LEVER = ["palantir", "wealthsimple", "kobo", "nuvei", "applyboard", "clearco"]
 REFERRAL_TARGETS = ["Google", "RBC", "Cloudflare", "Datadog", "Shopify", "Microsoft", "Amazon"]
 SCHOOL = "Seneca Polytechnic"
 
+# "Today" is measured in this timezone.
+TZ = ZoneInfo("America/Toronto")
+
 # Resume-derived keywords and weights (title hits count 3x).
 RESUME_KEYWORDS = {
     # core fit
@@ -70,22 +78,26 @@ RESUME_KEYWORDS = {
     "javascript": 2, "node.js": 2, "postgresql": 2, "spark": 2,
     "wireshark": 2, "nmap": 2, "burp": 2, "metasploit": 2, "semgrep": 2,
 }
+
 NEGATIVE = {  # things that don't fit a 2nd/3rd-year security student
     "phd": -10, "ph.d": -10, "master's": -4, "mba": -10, "senior": -6, "staff": -6,
     "director": -10, "sales": -6, "marketing": -6, "recruit": -6,
     "legal": -6, "hardware": -3, "mechanical": -6, "electrical": -4,
 }
+
 INTERN_WORDS = ("intern", "co-op", "coop", "co op", "student", "apprentice", "new grad intern")
+
 SECURITY_WORDS = ("secur", "cyber", "devsecops", "appsec", "infosec", "threat",
                   "vulnerab", "pentest", "penetration", "soc ", "detection", "risk", "grc",
                   "cloud", "devops", "platform", "software", "sre", "reliab", "data", "ml ", "ai ",
-                   "backend", "full stack", "quant", "developer", "engineer", "analytics")
+                  "backend", "full stack", "quant", "developer", "engineer", "analytics")
 
 SEASON_PATTERNS = {
     "Winter 2027": r"winter\s*2027|jan(uary)?\s*2027|2027\s*winter|\bw27\b|jan\s*[-–]\s*apr\s*2027",
     "Summer 2027": r"summer\s*2027|may\s*2027|2027\s*summer|\bs27\b|may\s*[-–]\s*aug(ust)?\s*2027",
     "Fall 2027": r"fall\s*2027|autumn\s*2027|sep(tember)?\s*2027|2027\s*fall",
 }
+
 GTA = ("toronto", "north york", "scarborough", "etobicoke", "markham",
        "mississauga", "brampton", "vaughan", "richmond hill", "oakville",
        "burlington", "pickering", "ajax", "whitby", "oshawa")
@@ -95,12 +107,13 @@ CANADA = ("canada", "toronto", "ontario", "waterloo", "ottawa", "montreal",
           "montréal", "vancouver", "mississauga", "markham", "kitchener",
           "calgary", "edmonton", "halifax", "winnipeg", "quebec",
           "québec", "british columbia", "alberta", "nova scotia")
-HEADERS = {"User-Agent": "internship-finder/1.0 (personal use)"}
 
+HEADERS = {"User-Agent": "internship-finder/1.0 (personal use)"}
 
 # --------------------------------------------------------------------------
 # Helpers
 # --------------------------------------------------------------------------
+
 def clean(text: str) -> str:
     text = html.unescape(text or "")
     text = re.sub(r"<[^>]+>", " ", text)
@@ -117,14 +130,40 @@ def get_json(url, timeout=20):
         return None
 
 
-def make_job(company, title, location, url, desc="", source="", terms=""):
-    return {"company": company, "title": title, "location": location,
-            "url": url, "desc": clean(desc)[:6000], "source": source, "terms": terms}
+def to_dt(value):
+    """Unix seconds, unix ms, or ISO string -> aware datetime (None if unknown)."""
+    if value in (None, ""):
+        return None
+    try:
+        if isinstance(value, (int, float)) or str(value).isdigit():
+            v = float(value)
+            if v > 1e11:  # milliseconds (Lever)
+                v /= 1000
+            return datetime.fromtimestamp(v, tz=timezone.utc)
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
 
+
+def posted_within(job, days):
+    """True if posted today (days=0) or within the last N calendar days, Toronto time."""
+    dt = job.get("posted")
+    if not dt:
+        return False  # can't verify the date, so skip it
+    cutoff = datetime.now(TZ).date() - timedelta(days=days)
+    return dt.astimezone(TZ).date() >= cutoff
+
+
+def make_job(company, title, location, url, desc="", source="", terms="", posted=None):
+    return {"company": company, "title": title, "location": location,
+            "url": url, "desc": clean(desc)[:6000], "source": source,
+            "terms": terms, "posted": posted}
 
 # --------------------------------------------------------------------------
 # Sources
 # --------------------------------------------------------------------------
+
 def fetch_listing_files():
     jobs = []
     for url in LISTING_SOURCES:
@@ -141,6 +180,7 @@ def fetch_listing_files():
                 "; ".join(locs) if isinstance(locs, list) else str(locs),
                 j.get("url", ""), source="github-list",
                 terms=" ".join(j.get("terms") or []) + " " + str(j.get("season", "")),
+                posted=to_dt(j.get("date_posted")),
             ))
     return jobs
 
@@ -153,7 +193,8 @@ def fetch_greenhouse(token):
         if not any(w in title.lower() for w in INTERN_WORDS):
             continue
         out.append(make_job(token.title(), title, (j.get("location") or {}).get("name", ""),
-                            j.get("absolute_url", ""), j.get("content", ""), "greenhouse"))
+                            j.get("absolute_url", ""), j.get("content", ""), "greenhouse",
+                            posted=to_dt(j.get("first_published") or j.get("updated_at"))))
     return out
 
 
@@ -165,7 +206,8 @@ def fetch_lever(token):
         if not any(w in title.lower() for w in INTERN_WORDS):
             continue
         out.append(make_job(token.title(), title, (j.get("categories") or {}).get("location", ""),
-                            j.get("hostedUrl", ""), j.get("descriptionPlain", ""), "lever"))
+                            j.get("hostedUrl", ""), j.get("descriptionPlain", ""), "lever",
+                            posted=to_dt(j.get("createdAt"))))
     return out
 
 
@@ -178,10 +220,10 @@ def collect():
             jobs += res
     return jobs
 
-
 # --------------------------------------------------------------------------
 # Matching
 # --------------------------------------------------------------------------
+
 def detect_season(job):
     blob = f"{job['title']} {job['terms']} {job['desc']}".lower()
     found = [s for s, pat in SEASON_PATTERNS.items() if re.search(pat, blob)]
@@ -242,13 +284,17 @@ def location_ok(job, region):
     return is_ca or is_us
 
 
-def filter_and_rank(jobs, region, min_score):
+def filter_and_rank(jobs, region, min_score, days=None):
+    """days=None -> no date filter; days=0 -> posted today only (Toronto time);
+    days=N -> posted within the last N calendar days."""
     seen, ranked = set(), []
     for j in jobs:
         key = (j["company"].lower(), j["title"].lower(), j["url"])
         if key in seen or not j["url"]:
             continue
         seen.add(key)
+        if days is not None and not posted_within(j, days):
+            continue
         text = f"{j['title']} {j['desc'][:500]}".lower()
         if not any(w in j["title"].lower() for w in INTERN_WORDS):
             continue
@@ -258,7 +304,9 @@ def filter_and_rank(jobs, region, min_score):
             continue
         season = detect_season(j)
         # If a listing names a season and it's neither of ours, drop it (e.g. Fall 2026).
-        explicit_other = re.search(r"\b(?:fall|summer|winter|spring)\s*202[0-689]\b|\b202[0-689]\s*(?:fall|summer|winter|spring)\b", f"{j['title']} {j['terms']}".lower())
+        explicit_other = re.search(
+            r"\b(?:fall|summer|winter|spring)\s*202[0-689]\b|\b202[0-689]\s*(?:fall|summer|winter|spring)\b",
+            f"{j['title']} {j['terms']}".lower())
         if explicit_other and not season:
             continue
         sc, hits = score(j)
@@ -272,10 +320,10 @@ def filter_and_rank(jobs, region, min_score):
     ranked.sort(key=lambda x: (x["priority_score"], x["season"] != "unspecified"), reverse=True)
     return ranked
 
-
 # --------------------------------------------------------------------------
 # Google + referral helpers
 # --------------------------------------------------------------------------
+
 def google_links(region="both"):
     base = "https://www.google.com/about/careers/applications/jobs/results/"
     places = {"canada": ["Canada"], "us": ["United States"], "both": ["Canada", "United States"]}[region]
@@ -295,32 +343,45 @@ def referral_links(company):
     colorstack = f"https://www.linkedin.com/search/results/people/?keywords={cs}"
     return alumni, colorstack
 
-
 # --------------------------------------------------------------------------
+
+def fmt_posted(job):
+    dt = job.get("posted")
+    return dt.astimezone(TZ).strftime("%b %d %H:%M") if dt else "?"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--region", choices=["both", "canada", "us"], default="both",
                     help="where to look (default: both Canada and US)")
     ap.add_argument("--top", type=int, default=40)
     ap.add_argument("--min-score", type=int, default=8)
+    ap.add_argument("--days", type=int, default=0,
+                    help="only postings from the last N calendar days (0 = today only, Toronto time)")
+    ap.add_argument("--any-date", action="store_true", help="turn the date filter off")
     ap.add_argument("--out", default="internships.csv")
     args = ap.parse_args()
+
+    days = None if args.any_date else args.days
 
     print("Fetching listings...", file=sys.stderr)
     jobs = collect()
     print(f"  pulled {len(jobs)} raw postings", file=sys.stderr)
-    ranked = filter_and_rank(jobs, args.region, args.min_score)
+
+    ranked = filter_and_rank(jobs, args.region, args.min_score, days)
 
     with open(args.out, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["priority_score", "score", "region", "season", "company", "title", "location", "matched_keywords", "url", "source"])
+        w.writerow(["priority_score", "score", "region", "season", "posted", "company", "title",
+                    "location", "matched_keywords", "url", "source"])
         for j in ranked:
-            w.writerow([j["priority_score"], j["score"], j["region"], j["season"], j["company"], j["title"], j["location"],
-                        j["matched"], j["url"], j["source"]])
+            w.writerow([j["priority_score"], j["score"], j["region"], j["season"], fmt_posted(j),
+                        j["company"], j["title"], j["location"], j["matched"], j["url"], j["source"]])
 
-    print(f"\n=== Region: {args.region} | Top {min(args.top, len(ranked))} of {len(ranked)} matches (saved to {args.out}) ===\n")
+    window = "any date" if days is None else ("today" if days == 0 else f"last {days} day(s)")
+    print(f"\n=== Region: {args.region} | Posted: {window} | Top {min(args.top, len(ranked))} of {len(ranked)} matches (saved to {args.out}) ===\n")
     for j in ranked[: args.top]:
-        print(f"[{j['priority_score']:>3}] {j['company']} | {j['title']} | {j['location'] or 'n/a'} | {j['season']}")
+        print(f"[{j['priority_score']:>3}] {j['company']} | {j['title']} | {j['location'] or 'n/a'} | {j['season']} | posted {fmt_posted(j)}")
         print(f"      matched: {j['matched']}")
         print(f"      {j['url']}\n")
 
