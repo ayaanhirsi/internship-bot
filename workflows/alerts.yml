@@ -1,7 +1,7 @@
 name: internship-alerts
 on:
   schedule:
-    - cron: "0 * * * * *"   # daily, about 9am Toronto time
+    - cron: "*/15 * * * *"   # every 15 min
   workflow_dispatch:
 permissions:
   contents: write
