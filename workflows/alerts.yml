@@ -2,7 +2,7 @@ name: internship-alerts
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # every 30 min
+    - cron: "*/30 * * * *"   # every 30 minutes
   workflow_dispatch:
 
 permissions:
@@ -17,14 +17,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install requests
-      - run: python notify.py
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Find internships and send alerts
+        run: python notify.py
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-      - name: Save seen list
+
+      - name: Save seen internships
         run: |
           git config user.name "internship-bot"
           git config user.email "bot@users.noreply.github.com"
