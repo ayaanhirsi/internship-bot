@@ -1,10 +1,17 @@
 name: internship-alerts
+
 on:
   schedule:
-    - cron: "*/15 * * * *"   # every 15 min
+    - cron: "*/30 * * * *"   # every 30 min
   workflow_dispatch:
+
 permissions:
   contents: write
+
+concurrency:
+  group: internship-alerts
+  cancel-in-progress: false
+
 jobs:
   run:
     runs-on: ubuntu-latest
